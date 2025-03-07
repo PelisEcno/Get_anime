@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import requests
 from bs4 import BeautifulSoup
 
@@ -7,42 +7,54 @@ app = Flask(__name__)
 # Función para obtener la info de un anime desde su slug
 def obtener_info_anime(slug):
     url = f"https://ww7.series24.org/series/{slug}/"
+    print(f"Consultando URL: {url}")  # Verificar la URL generada
     headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code != 200:
-        return None  # Si la página no existe, devuelve None
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    try:
+        response = requests.get(url, headers=headers)
+        print(f"Estado de la respuesta: {response.status_code}")  # Verificar si la página responde
+        
+        if response.status_code != 200:
+            return None
 
-    # Obtener título
-    titulo_tag = soup.select_one("h1.h1.ttl")
-    titulo = titulo_tag.text.strip() if titulo_tag else "No encontrado"
+        soup = BeautifulSoup(response.text, "html.parser")
 
-    # Obtener sinopsis
-    sinopsis_tag = soup.find("div", class_="summary")
-    sinopsis = sinopsis_tag.find("p").text.strip() if sinopsis_tag else "No encontrada"
+        # Obtener título
+        titulo_tag = soup.select_one("h1.h1.ttl")
+        titulo = titulo_tag.text.strip() if titulo_tag else "No encontrado"
 
-    # Obtener imagen
-    imagen_tag = soup.find("div", class_="title-img")
-    imagen = imagen_tag.find("img")["src"] if imagen_tag else "No encontrada"
+        # Obtener sinopsis
+        sinopsis_tag = soup.find("div", class_="summary")
+        sinopsis = sinopsis_tag.find("p").text.strip() if sinopsis_tag else "No encontrada"
 
-    # Obtener episodios
-    episodios = []
-    for cap in soup.select(".episodes .episode"):
-        nombre_tag = cap.find("span", class_="fwb link-co")
-        enlace_tag = cap.find("a")
+        # Obtener imagen
+        imagen_tag = soup.find("div", class_="title-img")
+        imagen = imagen_tag.find("img")["src"] if imagen_tag else "No encontrada"
 
-        nombre = nombre_tag.text.strip() if nombre_tag else "Sin nombre"
-        enlace = enlace_tag["href"] if enlace_tag else "Sin enlace"
+        # Obtener episodios
+        episodios = []
+        for cap in soup.select(".episodes .episode"):
+            nombre_tag = cap.find("span", class_="fwb link-co")
+            enlace_tag = cap.find("a")
 
-        episodios.append({"nombre": nombre, "enlace": enlace})
+            nombre = nombre_tag.text.strip() if nombre_tag else "Sin nombre"
+            enlace = enlace_tag["href"] if enlace_tag else "Sin enlace"
 
-    return {"titulo": titulo, "sinopsis": sinopsis, "imagen": imagen, "episodios": episodios}
+            episodios.append({"nombre": nombre, "enlace": enlace})
 
-# Ruta para obtener info de un anime por su slug
-@app.route('/api/gnula/anime/<slug>', methods=['GET'])
-def obtener_anime(slug):
+        return {"titulo": titulo, "sinopsis": sinopsis, "imagen": imagen, "episodios": episodios}
+
+    except Exception as e:
+        print(f"Error al obtener el anime: {e}")
+        return None
+
+# Ruta para obtener info de un anime por su slug desde la URL
+@app.route('/api/gnula/anime', methods=['GET'])
+def obtener_anime():
+    slug = request.args.get('slug')  # Obtener el slug desde la URL
+    if not slug:
+        return jsonify({"error": "Falta el parámetro 'slug'"}), 400
+
     datos = obtener_info_anime(slug)
     if datos:
         return jsonify(datos)
@@ -50,4 +62,5 @@ def obtener_anime(slug):
         return jsonify({"error": "Anime no encontrado"}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    print("Iniciando servidor Flask...")
+    app.run(debug=True, host="0.0.0.0", port=5000)
