@@ -1,26 +1,40 @@
 from flask import Flask, jsonify, request
-import requests
-from bs4 import BeautifulSoup
+import cloudscraper
 
 app = Flask(__name__)
 
-# Función para obtener la info de un anime desde su slug
-def obtener_info_anime(slug):
-    url = f"https://ww7.series24.org/series/{slug}/"
-    print(f"Consultando URL: {url}")  # Verificar la URL generada
-    headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Referer": "https://ww7.series24.org/",
-    "Accept-Language": "es-ES,es;q=0.9",
+# Configuración de Proxies (Opcional, si sigue dando 403)
+PROXIES = {
+    "http": "http://usuario:contraseña@proxy_ip:puerto",
+    "https": "http://usuario:contraseña@proxy_ip:puerto",
 }
 
-    try:
-        response = requests.get(url, headers=headers)
-        print(f"Estado de la respuesta: {response.status_code}")  # Verificar si la página responde
-        
-        if response.status_code != 200:
-            return None
+# Función para obtener la info de un anime desde su slug
+def obtener_info_anime(slug):
+    url = f"https://ww7.series24.org/series/{slug}".strip("/")
+    print(f"➡️ Consultando URL: {url}")
 
+    try:
+        # Usar CloudScraper para evadir Cloudflare
+        scraper = cloudscraper.create_scraper()
+
+        # Headers con Referer falso para evitar bloqueos
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://ww7.series24.org/",
+            "Accept-Language": "es-ES,es;q=0.9",
+        }
+
+        # Hacer la solicitud con headers y (opcionalmente) proxies
+        response = scraper.get(url, headers=headers)  # Si sigue fallando, usa: response = scraper.get(url, headers=headers, proxies=PROXIES)
+        print(f"ℹ️ Estado de la respuesta: {response.status_code}")
+
+        if response.status_code == 403:
+            print("❌ Bloqueo de Series24 (403 Forbidden)")
+            return {"error": "Acceso bloqueado por Series24"}
+
+        # Procesar el HTML con BeautifulSoup
+        from bs4 import BeautifulSoup
         soup = BeautifulSoup(response.text, "html.parser")
 
         # Obtener título
@@ -49,22 +63,19 @@ def obtener_info_anime(slug):
         return {"titulo": titulo, "sinopsis": sinopsis, "imagen": imagen, "episodios": episodios}
 
     except Exception as e:
-        print(f"Error al obtener el anime: {e}")
-        return None
+        print(f"🔥 Error inesperado: {e}")
+        return {"error": "Fallo en la solicitud"}
 
 # Ruta para obtener info de un anime por su slug desde la URL
 @app.route('/api/gnula/anime', methods=['GET'])
 def obtener_anime():
     slug = request.args.get('slug')  # Obtener el slug desde la URL
     if not slug:
-        return jsonify({"error": "Falta el parámetro 'slug'"}), 400
+        return jsonify({"error": "Falta el parámetro 'slug'"})
 
     datos = obtener_info_anime(slug)
-    if datos:
-        return jsonify(datos)
-    else:
-        return jsonify({"error": "Anime no encontrado"}), 404
+    return jsonify(datos) if datos else jsonify({"error": "Anime no encontrado"}), 404
 
 if __name__ == '__main__':
-    print("Iniciando servidor Flask...")
+    print("🚀 Iniciando servidor Flask...")
     app.run(debug=True, host="0.0.0.0", port=5000)
