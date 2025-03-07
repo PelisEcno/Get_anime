@@ -8,7 +8,11 @@ app = Flask(__name__)
 def obtener_info_anime(slug):
     url = f"https://ww7.series24.org/series/{slug}/"
     print(f"Consultando URL: {url}")  # Verificar la URL generada
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://ww7.series24.org/",
+    "Accept-Language": "es-ES,es;q=0.9",
+}
 
     try:
         response = requests.get(url, headers=headers)
